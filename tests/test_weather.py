@@ -27,17 +27,16 @@ def response(body):
 
 
 class LoadCitiesTests(unittest.TestCase):
-    def test_deduplicates_across_files_and_preserves_order(self):
+    def test_deduplicates_in_one_file_and_preserves_order(self):
         with tempfile.TemporaryDirectory() as directory:
-            first = Path(directory) / "first.txt"
-            second = Path(directory) / "second.txt"
-            first.write_text("\ufeff Moscow \n\nTokyo\nMOSCOW\n", encoding="utf-8")
-            second.write_text("Tokyo\nVienna\n", encoding="utf-8")
-            self.assertEqual(weather.load_cities([first, second]),
+            path = Path(directory) / "cities.txt"
+            path.write_text("\ufeff Moscow \n\nTokyo\nMOSCOW\nTokyo\nVienna\n",
+                            encoding="utf-8")
+            self.assertEqual(weather.load_cities(path),
                              ["Moscow", "Tokyo", "Vienna"])
 
-    def test_supplied_files_have_eight_unique_cities(self):
-        self.assertEqual(weather.load_cities(weather.DEFAULT_FILES), [
+    def test_supplied_file_has_eight_unique_cities(self):
+        self.assertEqual(weather.load_cities(weather.DEFAULT_FILE), [
             "Moscow", "Khabarovsk", "Saint-Petersburg", "Vienna",
             "Izhevsk", "Perm", "NhaTrang", "Villach",
         ])
@@ -47,12 +46,12 @@ class LoadCitiesTests(unittest.TestCase):
             path = Path(directory) / "empty.txt"
             path.write_text(" \n\n", encoding="utf-8")
             with self.assertRaises(ValueError):
-                weather.load_cities([path])
+                weather.load_cities(path)
 
     def test_missing_file_is_an_error(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(FileNotFoundError):
-                weather.load_cities([Path(directory) / "missing.txt"])
+                weather.load_cities(Path(directory) / "missing.txt")
 
 
 class ParseTests(unittest.TestCase):
@@ -190,13 +189,13 @@ class CliTests(unittest.TestCase):
         return code, output.getvalue(), errors.getvalue()
 
     @patch("weather.fetch_weather")
-    def test_default_files_request_each_unique_city_once(self, fetch):
+    def test_default_file_requests_each_unique_city_once(self, fetch):
         fetch.side_effect = lambda city, *_: weather.WeatherData(city, 10, "Testland")
         code, output, _ = self.run_main([])
         self.assertEqual(code, 0)
         self.assertEqual(fetch.call_count, 8)
         self.assertEqual([call.args[0] for call in fetch.call_args_list],
-                         weather.load_cities(weather.DEFAULT_FILES))
+                         weather.load_cities(weather.DEFAULT_FILE))
         self.assertIn("Testland - 8 cities, avg: +10 °C", output)
 
     @patch("weather.load_cities", return_value=["Tokyo", "Moscow"])
@@ -209,7 +208,15 @@ class CliTests(unittest.TestCase):
         self.assertIn("Russia - 1 city, avg: -3 °C", output)
         self.assertNotIn("Tokyo,", output)
         self.assertIn("1 из 2", errors)
-        load.assert_called_once_with([Path("custom.txt")])
+        load.assert_called_once_with(Path("custom.txt"))
+
+    @patch("weather.fetch_weather")
+    def test_two_input_files_are_rejected_before_http(self, fetch):
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as result:
+                weather.main(["first.txt", "second.txt"])
+        self.assertEqual(result.exception.code, 2)
+        fetch.assert_not_called()
 
     @patch("weather.load_cities", return_value=["Tokyo"])
     @patch("weather.fetch_weather", side_effect=weather.WeatherError("offline"))

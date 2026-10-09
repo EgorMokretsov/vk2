@@ -17,10 +17,7 @@ from urllib.request import Request, urlopen
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_FILES = (
-    BASE_DIR / "файлы со списком городов" / "Cities.txt",
-    BASE_DIR / "файлы со списком городов" / "vk-task-14.txt",
-)
+DEFAULT_FILE = BASE_DIR / "Cities.txt"
 
 
 @dataclass(frozen=True)
@@ -45,19 +42,18 @@ class WeatherError(Exception):
     """Сервис недоступен или прислал некорректные данные."""
 
 
-def load_cities(paths: Sequence[Path]) -> list[str]:
+def load_cities(path: Path) -> list[str]:
     """Прочитать UTF-8/UTF-8 BOM, убрать пустые строки и повторы."""
     cities: list[str] = []
     seen: set[str] = set()
-    for path in paths:
-        for line in path.read_text(encoding="utf-8-sig").splitlines():
-            city = line.strip()
-            key = city.casefold()
-            if city and key not in seen:
-                seen.add(key)
-                cities.append(city)
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        city = line.strip()
+        key = city.casefold()
+        if city and key not in seen:
+            seen.add(key)
+            cities.append(city)
     if not cities:
-        raise ValueError("В файлах нет городов.")
+        raise ValueError("В файле нет городов.")
     return cities
 
 
@@ -157,15 +153,15 @@ def nonnegative_integer(value: str) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("files", nargs="*", type=Path,
-                        help="файлы городов; по умолчанию оба приложенных файла")
+    parser.add_argument("file", nargs="?", type=Path, default=DEFAULT_FILE,
+                        help="файл городов; по умолчанию Cities.txt рядом со скриптом")
     parser.add_argument("--timeout", type=positive_timeout, default=20.0,
                         help="тайм-аут запроса в секундах (по умолчанию 20)")
     parser.add_argument("--retries", type=nonnegative_integer, default=2,
                         help="число повторов при временном сбое (по умолчанию 2)")
     args = parser.parse_args(argv)
     try:
-        cities = load_cities(args.files or DEFAULT_FILES)
+        cities = load_cities(args.file)
     except (OSError, UnicodeError, ValueError) as exc:
         print(f"Ошибка чтения списка городов: {exc}", file=sys.stderr)
         return 1
