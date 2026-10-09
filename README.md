@@ -109,5 +109,3 @@ GitHub Actions запускает их на Windows и Linux с Python 3.10, 3.1
 - `tests/` — автоматические проверки.
 - `Cities.txt` — исходный список городов.
 - `.github/workflows/tests.yml` — автоматическая проверка на GitHub.
-
-Ссылка для сдачи: **https://github.com/EgorMokretsov/vk2**.
